@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f4f7f6; }
+        main { max-width: 420px; margin: 8vh auto; padding: 25px; background: white; border-radius: 8px; box-shadow: 0 4px 8px #0002; }
+        label { display: block; margin: 14px 0 5px; font-weight: bold; }
+        input, button { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { margin-top: 16px; background: #007bff; color: white; border: 0; cursor: pointer; font-size: 16px; }
+        #message { margin-top: 14px; color: #721c24; }
+        .switch { text-align: center; }
+        .switch button { background: none; color: #007bff; padding: 0; width: auto; }
+    </style>
+</head>
+<body>
+<main>
+    <h1 id="heading">Sign in</h1>
+    <form id="authForm">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="email" required>
+        <label for="password">Password</label>
+        <input id="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required>
+        <button id="submitButton" type="submit">Sign in</button>
+    </form>
+    <p id="message" role="status" aria-live="polite"></p>
+    <p class="switch"><span id="switchPrompt">New learner?</span>
+        <button id="switchMode" type="button">Create account</button>
+    </p>
+    <p class="switch"><a href="/operatorSignup.html">Create an operator account</a></p>
+</main>
+<script>
+    let signupMode = false;
+    const form = document.getElementById('authForm');
+    const message = document.getElementById('message');
+
+    async function checkSession() {
+        const response = await fetch('/api/auth/me');
+        const user = await response.json();
+        if (user.authenticated) {
+            redirectForRole(user.role);
+        }
+    }
+
+    function redirectForRole(role) {
+        window.location.replace(role === 'OPERATOR' || role === 'DATA_ENTRY' || role === 'ADMIN'
+            ? '/manageQuestions.html'
+            : '/getSubjects.html');
+    }
+
+    document.getElementById('switchMode').addEventListener('click', function () {
+        signupMode = !signupMode;
+        document.getElementById('heading').textContent = signupMode ? 'Create learner account' : 'Sign in';
+        document.getElementById('submitButton').textContent = signupMode ? 'Create account' : 'Sign in';
+        document.getElementById('switchPrompt').textContent = signupMode ? 'Already registered?' : 'New learner?';
+        this.textContent = signupMode ? 'Sign in' : 'Create account';
+        document.getElementById('password').autocomplete = signupMode ? 'new-password' : 'current-password';
+        message.textContent = '';
+    });
+
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        message.textContent = '';
+        const endpoint = signupMode ? '/api/auth/signup' : '/api/auth/login';
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: document.getElementById('email').value,
+                    password: document.getElementById('password').value
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                message.textContent = data.message || 'Unable to complete the request.';
+                return;
+            }
+            if (signupMode) {
+                signupMode = false;
+                document.getElementById('heading').textContent = 'Sign in';
+                document.getElementById('submitButton').textContent = 'Sign in';
+                document.getElementById('switchPrompt').textContent = 'New learner?';
+                document.getElementById('switchMode').textContent = 'Create account';
+                document.getElementById('password').value = '';
+                message.textContent = data.message;
+                return;
+            }
+            redirectForRole(data.role);
+        } catch (error) {
+            message.textContent = 'Could not connect to the application.';
+        }
+    });
+
+    checkSession().catch(function () {
+        message.textContent = 'Could not verify your login. Please reload the page.';
+    });
+</script>
+</body>
+</html>

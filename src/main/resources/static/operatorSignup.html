@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operator Signup</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f4f7f6; }
+        main { max-width: 440px; margin: 8vh auto; padding: 25px; background: white; border-radius: 8px; box-shadow: 0 4px 8px #0002; }
+        label { display: block; margin: 14px 0 5px; font-weight: bold; }
+        input, button { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { margin-top: 16px; background: #007bff; color: white; border: 0; cursor: pointer; font-size: 16px; }
+        #message { margin-top: 14px; }
+        a { color: #007bff; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Create Operator Account</h1>
+    <p>An operator signup code from the application administrator is required.</p>
+    <form id="signupForm">
+        <label for="email">Email</label>
+        <input id="email" type="email" maxlength="255" autocomplete="email" required>
+        <label for="password">Password (at least 8 characters)</label>
+        <input id="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
+        <label for="signupCode">Operator signup code</label>
+        <input id="signupCode" type="password" autocomplete="off" required>
+        <button id="submitButton" type="submit">Create Operator Account</button>
+    </form>
+    <p id="message" role="status" aria-live="polite"></p>
+    <p><a href="/">Back to sign in</a></p>
+</main>
+<script>
+    const form = document.getElementById('signupForm');
+    const message = document.getElementById('message');
+    form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const button = document.getElementById('submitButton');
+        button.disabled = true;
+        message.textContent = '';
+        try {
+            const response = await fetch('/api/auth/operator-signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: document.getElementById('email').value,
+                    password: document.getElementById('password').value,
+                    signupCode: document.getElementById('signupCode').value
+                })
+            });
+            const data = await response.json();
+            message.textContent = data.message || 'Unable to create the account.';
+            if (response.ok) {
+                form.reset();
+                window.setTimeout(function () {
+                    window.location.assign('/');
+                }, 1200);
+            }
+        } catch (error) {
+            message.textContent = 'Could not connect to the application.';
+        } finally {
+            button.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>

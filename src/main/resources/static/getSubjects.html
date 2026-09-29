@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Home</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f4f7f6; }
+        main { max-width: 650px; margin: 4vh auto; padding: 25px; background: white; border-radius: 8px; box-shadow: 0 4px 8px #0002; }
+        label { display: block; margin: 14px 0 5px; font-weight: bold; }
+        select, button { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { margin-top: 12px; background: #007bff; color: white; border: 0; cursor: pointer; font-size: 16px; }
+        button:disabled { background: #6c757d; cursor: wait; }
+        fieldset { border: 1px solid #ddd; border-radius: 5px; margin: 18px 0; padding: 15px; }
+        .answer { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; }
+        .answer input { width: auto; }
+        #quizArea, #message { margin-top: 18px; }
+        #message { padding: 10px; border-radius: 4px; }
+        .error { color: #721c24; background: #f8d7da; }
+        .success { color: #155724; background: #d4edda; }
+        .toolbar { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+        .toolbar button { width: auto; margin: 0; padding: 8px 12px; }
+        a { color: #007bff; }
+    </style>
+</head>
+<body>
+<main>
+    <div class="toolbar">
+        <h1>Quiz Home</h1>
+        <button id="logoutButton" type="button">Sign out</button>
+    </div>
+    <p id="welcome"></p>
+    <p id="staffLink" hidden><a href="/manageQuestions.html">Manage questions</a></p>
+    <form id="subjectForm">
+        <label for="subject">Choose a subject:</label>
+        <select id="subject" required>
+            <option value="">-- Choose a Subject --</option>
+            <option value="KOTLIN">KOTLIN</option>
+            <option value="JAVA">JAVA</option>
+            <option value="AI">AI</option>
+            <option value="REACT">REACT</option>
+            <option value="PYTHON">PYTHON</option>
+            <option value="SPRING_BOOT">SPRING BOOT</option>
+        </select>
+        <button id="startButton" type="submit">Start Quiz</button>
+    </form>
+    <div id="message" role="status" aria-live="polite"></div>
+    <section id="quizArea" hidden>
+        <p id="progress"></p>
+        <form id="answerForm">
+            <fieldset>
+                <legend id="questionText"></legend>
+                <div id="answers"></div>
+            </fieldset>
+            <button id="answerButton" type="submit">Submit Answer</button>
+        </form>
+    </section>
+</main>
+<script>
+    const message = document.getElementById('message');
+    const quizArea = document.getElementById('quizArea');
+    let currentQuestion = null;
+
+    function showMessage(text, kind) {
+        message.textContent = text;
+        message.className = kind || '';
+    }
+
+    function renderQuestion(question, questionNumber, totalQuestions) {
+        currentQuestion = question;
+        document.getElementById('progress').textContent =
+            `Question ${questionNumber} of ${totalQuestions}`;
+        document.getElementById('questionText').textContent = question.question;
+        const answers = document.getElementById('answers');
+        answers.replaceChildren();
+
+        ['option_1', 'option_2', 'option_3', 'option_4'].forEach(function (key, index) {
+            const label = document.createElement('label');
+            label.className = 'answer';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'answer';
+            input.value = String.fromCharCode(65 + index);
+            input.required = true;
+            const text = document.createElement('span');
+            text.textContent = `${String.fromCharCode(65 + index)}. ${question[key]}`;
+            label.append(input, text);
+            answers.append(label);
+        });
+        quizArea.hidden = false;
+    }
+
+    async function loadCurrentUser() {
+        const response = await fetch('/api/auth/me');
+        const user = await response.json();
+        if (!user.authenticated) {
+            window.location.replace('/');
+            return;
+        }
+        document.getElementById('welcome').textContent = `Signed in as ${user.email}`;
+        if (user.role === 'ADMIN' || user.role === 'DATA_ENTRY' || user.role === 'OPERATOR') {
+            document.getElementById('staffLink').hidden = false;
+        }
+    }
+
+    document.getElementById('subjectForm').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const button = document.getElementById('startButton');
+        button.disabled = true;
+        quizArea.hidden = true;
+        showMessage('Starting quiz...', '');
+        try {
+            const subject = document.getElementById('subject').value;
+            const response = await fetch(`/api/questions/quiz/start/${encodeURIComponent(subject)}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                showMessage(data.message || 'Could not start the quiz.', 'error');
+                return;
+            }
+            showMessage(data.message, 'success');
+            renderQuestion(data.question, data.questionNumber, data.totalQuestions);
+        } catch (error) {
+            showMessage('Could not connect to the application.', 'error');
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    document.getElementById('answerForm').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const selected = document.querySelector('input[name="answer"]:checked');
+        if (!selected || !currentQuestion) {
+            return;
+        }
+        const button = document.getElementById('answerButton');
+        button.disabled = true;
+        try {
+            const response = await fetch('/api/questions/quiz/answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ answer: selected.value })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                showMessage(data.message || 'Could not submit your answer.', 'error');
+                return;
+            }
+            showMessage(data.message, data.correct ? 'success' : 'error');
+            if (data.correct && data.complete) {
+                quizArea.hidden = true;
+                currentQuestion = null;
+            } else if (data.correct) {
+                renderQuestion(data.question, data.questionNumber, data.totalQuestions);
+            }
+        } catch (error) {
+            showMessage('Could not connect to the application.', 'error');
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    document.getElementById('logoutButton').addEventListener('click', async function () {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.replace('/');
+    });
+
+    loadCurrentUser().catch(function () {
+        showMessage('Could not verify your login. Please reload the page.', 'error');
+    });
+</script>
+</body>
+</html>
